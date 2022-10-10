@@ -316,6 +316,10 @@ public abstract class Reactor implements Executor {
         return name;
     }
 
+    public Object scheduler() {
+        return eventloop.scheduler;
+    }
+
     /**
      * The state of the {@link Reactor}.
      */
