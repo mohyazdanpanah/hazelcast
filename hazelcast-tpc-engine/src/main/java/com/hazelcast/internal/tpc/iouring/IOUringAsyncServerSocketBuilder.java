@@ -20,7 +20,6 @@ import com.hazelcast.internal.tpc.AcceptRequest;
 import com.hazelcast.internal.tpc.AsyncServerSocket;
 import com.hazelcast.internal.tpc.AsyncServerSocketBuilder;
 import com.hazelcast.internal.tpc.Option;
-import com.hazelcast.internal.tpc.nio.NioAsyncServerSocketOptions;
 
 import java.util.function.Consumer;
 

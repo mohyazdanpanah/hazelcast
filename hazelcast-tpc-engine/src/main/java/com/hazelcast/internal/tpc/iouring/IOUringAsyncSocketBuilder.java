@@ -20,24 +20,18 @@ import com.hazelcast.internal.tpc.AsyncSocket;
 import com.hazelcast.internal.tpc.AsyncSocketBuilder;
 import com.hazelcast.internal.tpc.Option;
 import com.hazelcast.internal.tpc.ReadHandler;
-import com.hazelcast.internal.tpc.nio.NioAsyncSocket;
 
 import java.util.concurrent.CompletableFuture;
 
 import static com.hazelcast.internal.tpc.util.ExceptionUtil.sneakyThrow;
 import static com.hazelcast.internal.tpc.util.Preconditions.checkNotNull;
-import static com.hazelcast.internal.tpc.util.Preconditions.checkPositive;
 
 public class IOUringAsyncSocketBuilder implements AsyncSocketBuilder {
-
-    static final int DEFAULT_UNFLUSHED_BUFS_CAPACITY = 2 << 16;
 
     final IOUringReactor reactor;
     final NativeSocket nativeSocket;
     final IOUringAcceptRequest acceptRequest;
     final boolean clientSide;
-    boolean writeThrough;
-    int unflushedBufsCapacity = DEFAULT_UNFLUSHED_BUFS_CAPACITY;
     ReadHandler readHandler;
     IOUringAsyncSocketOptions options;
     private boolean build;
@@ -63,27 +57,7 @@ public class IOUringAsyncSocketBuilder implements AsyncSocketBuilder {
         return this;
     }
 
-    public IOUringAsyncSocketBuilder setUnflushedBufsCapacity(int unflushedBufsCapacity) {
-        verifyNotBuild();
-
-        this.unflushedBufsCapacity = checkPositive(unflushedBufsCapacity, "unflushedBufsCapacity");
-        return this;
-    }
-
-    public IOUringAsyncSocketBuilder setWriteThrough(boolean writeThrough) {
-        verifyNotBuild();
-
-        this.writeThrough = writeThrough;
-        return this;
-    }
-
-    /**
-     * Sets the read handler. Should be called before this AsyncSocket is started.
-     *
-     * @param readHandler the ReadHandler
-     * @return this
-     * @throws NullPointerException if readHandler is null.
-     */
+    @Override
     public final IOUringAsyncSocketBuilder setReadHandler(ReadHandler readHandler) {
         verifyNotBuild();
 

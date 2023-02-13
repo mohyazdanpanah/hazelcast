@@ -22,6 +22,7 @@ import static com.hazelcast.internal.tpc.util.OS.pageSize;
 
 public class IOUringEventloop extends Eventloop {
     private final static Unsafe UNSAFE = UnsafeLocator.UNSAFE;
+
     private final IOUringReactor ioUringReactor;
     private final StorageDeviceRegistry storageScheduler;
 
@@ -61,7 +62,7 @@ public class IOUringEventloop extends Eventloop {
 
         this.eventLoopHandler = new EventloopHandler();
         //todo: ugly, should not be null
-        if(storageScheduler!=null) {
+        if (storageScheduler != null) {
             storageScheduler.init(this);
         }
         this.userdata_eventRead = nextPermanentHandlerId();

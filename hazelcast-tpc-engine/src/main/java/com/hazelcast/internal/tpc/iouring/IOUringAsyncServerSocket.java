@@ -31,6 +31,7 @@ import static com.hazelcast.internal.tpc.iouring.Linux.SOCK_CLOEXEC;
 import static com.hazelcast.internal.tpc.iouring.Linux.SOCK_NONBLOCK;
 import static com.hazelcast.internal.tpc.iouring.Linux.strerror;
 import static com.hazelcast.internal.tpc.iouring.NativeSocket.AF_INET;
+import static com.hazelcast.internal.tpc.util.ExceptionUtil.sneakyThrow;
 import static com.hazelcast.internal.tpc.util.Preconditions.checkNotNegative;
 import static com.hazelcast.internal.tpc.util.Preconditions.checkNotNull;
 
@@ -47,20 +48,23 @@ public final class IOUringAsyncServerSocket extends AsyncServerSocket {
     private final SubmissionQueue sq;
     private final Consumer<AcceptRequest> acceptRequestConsumer;
     private final IOUringAsyncServerSocketOptions options;
+    private final Thread eventloopThread;
 
     private long userdata_acceptHandler;
     private boolean bind = false;
+    private boolean started;
 
     IOUringAsyncServerSocket(IOUringAsyncServerSocketBuilder builder) {
         this.reactor = builder.reactor;
-        this.eventloop = (IOUringEventloop)reactor.eventloop();
+        this.eventloop = (IOUringEventloop) reactor.eventloop();
         this.options = builder.options;
         this.nativeSocket = builder.nativeSocket;
+        this.eventloopThread = reactor.eventloopThread();
         this.acceptRequestConsumer = builder.acceptConsumer;
         this.sq = eventloop.sq;
         if (!reactor.registerCloseable(this)) {
             close();
-            throw new IllegalStateException("EventLoop is not running");
+            throw new IllegalStateException("Reactor is not running");
         }
 
         // todo: return value not checked.
@@ -133,21 +137,36 @@ public final class IOUringAsyncServerSocket extends AsyncServerSocket {
 
     @Override
     public void start() {
-        CompletableFuture future = new CompletableFuture();
-        reactor.execute(() -> {
-            try {
-                 if (!sq_offer_OP_ACCEPT()) {
-                    throw new IllegalStateException("Submission queue rejected the OP_ACCEPT");
+        if (Thread.currentThread() == eventloopThread) {
+            start0();
+        } else {
+            CompletableFuture<Void> future = new CompletableFuture<>();
+            reactor.execute(() -> {
+                try {
+                    start0();
+                    future.complete(null);
+                } catch (Throwable t) {
+                    future.completeExceptionally(t);
+                    throw sneakyThrow(t);
                 }
-                if (logger.isInfoEnabled()) {
-                    logger.info("ServerSocket listening at " + getLocalAddress());
-                }
-                future.complete(null);
-            } catch (Exception e) {
-                future.completeExceptionally(e);
-            }
-        });
-        future.join();
+            });
+
+            future.join();
+        }
+    }
+
+    private void start0() {
+        if (started) {
+            throw new IllegalStateException(this + " is already started");
+        }
+        started = true;
+
+        if (!sq_offer_OP_ACCEPT()) {
+            throw new IllegalStateException("Submission queue rejected the OP_ACCEPT");
+        }
+        if (logger.isInfoEnabled()) {
+            logger.info("ServerSocket listening at " + getLocalAddress());
+        }
     }
 
     private boolean sq_offer_OP_ACCEPT() {
@@ -162,7 +181,6 @@ public final class IOUringAsyncServerSocket extends AsyncServerSocket {
                 userdata_acceptHandler
         );
     }
-
 
     private class Handler_OP_ACCEPT implements IOCompletionHandler {
 

@@ -16,17 +16,12 @@
 
 package com.hazelcast.internal.tpc.iouring;
 
-import com.hazelcast.internal.tpc.util.Preconditions;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
 import static com.hazelcast.internal.tpc.util.Preconditions.checkNotNegative;
 import static com.hazelcast.internal.tpc.util.Preconditions.checkPositive;
 
 /**
  * This class should get all the JNI methods.
- *
+ * <p>
  * Good read:
  * https://github.com/axboe/liburing/issues/536
  */
@@ -178,9 +173,9 @@ public final class IOUring implements AutoCloseable {
     public final static int IORING_REGISTER_FILE_ALLOC_RANGE = 25;
 
 
-    public final static int  IORING_RECVSEND_POLL_FIRST =	1 << 0;
-    public final static int  IORING_RECV_MULTISHOT		=1 << 1;
-    public final static int  IORING_RECVSEND_FIXED_BUF	=1 << 2;
+    public final static int IORING_RECVSEND_POLL_FIRST = 1 << 0;
+    public final static int IORING_RECV_MULTISHOT = 1 << 1;
+    public final static int IORING_RECVSEND_FIXED_BUF = 1 << 2;
     long ringAddr;
     int ringFd;
     int enterRingFd;
@@ -251,11 +246,11 @@ public final class IOUring implements AutoCloseable {
     /**
      * Registers the file descriptor of the ring. THis makes enter cheaper. There is a limit
      * on the number of IOURing instances that can be registered (16).
-     *
+     * <p>
      * For more info see:
      * https://man7.org/linux/man-pages/man3/io_uring_register_ring_fd.3.html
      */
-    public void registerRingFd(){
+    public void registerRingFd() {
         enterRingFd = registerRingFd(ringAddr);
         sq.enterRingFd = enterRingFd;
         sq.ringBufferRegistered = true;
@@ -267,12 +262,12 @@ public final class IOUring implements AutoCloseable {
      * For more info see:
      * // https://man7.org/linux/man-pages/man3/io_uring_unregister_ring_fd.3.html
      */
-    public void unregisterRingFd(){
+    public void unregisterRingFd() {
         unregisterRingFd(ringAddr);
     }
 
     public void register(int opcode, long arg, int nr_args) {
-       register(ringFd, opcode, arg, nr_args);
+        register(ringFd, opcode, arg, nr_args);
     }
 //
 //    public void registerSocket(int socket_fd){

@@ -17,14 +17,11 @@
 package com.hazelcast.internal.tpc.iouring;
 
 import com.hazelcast.internal.tpc.AcceptRequest;
-import com.hazelcast.internal.tpc.AsyncServerSocket;
 import com.hazelcast.internal.tpc.AsyncServerSocketBuilder;
-import com.hazelcast.internal.tpc.AsyncSocket;
 import com.hazelcast.internal.tpc.AsyncSocketBuilder;
 import com.hazelcast.internal.tpc.Eventloop;
 import com.hazelcast.internal.tpc.Reactor;
 import com.hazelcast.internal.tpc.ReactorBuilder;
-
 
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -60,7 +57,7 @@ public class IOUringReactor extends Reactor {
     public IOUringReactor(IOUringReactorBuilder builder) {
         super(builder);
         this.storageScheduler = builder.deviceRegistry;
-        this.eventFd = ((IOUringEventloop)eventloop()).eventfd;
+        this.eventFd = ((IOUringEventloop) eventloop()).eventfd;
     }
 
     /**
@@ -125,7 +122,7 @@ public class IOUringReactor extends Reactor {
 
 
         IOUringAcceptRequest ioUringAcceptRequest
-                = checkInstanceOf(IOUringAcceptRequest.class, acceptRequest,"acceptRequest");
+                = checkInstanceOf(IOUringAcceptRequest.class, acceptRequest, "acceptRequest");
         return new IOUringAsyncSocketBuilder(this, ioUringAcceptRequest);
     }
 

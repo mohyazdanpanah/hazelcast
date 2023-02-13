@@ -151,6 +151,7 @@ public final class NativeSocket implements AutoCloseable {
 
     /**
      * Configures the socket as blocking.
+     *
      * @param blocking
      */
     public void setBlocking(boolean blocking) {
@@ -179,7 +180,7 @@ public final class NativeSocket implements AutoCloseable {
             setBlocking(true);
             connect(fd, inetSocketAddress.getAddress().getAddress(), inetSocketAddress.getPort(), addressFamily);
 
-            if(!blocking) {
+            if (!blocking) {
                 setBlocking(false);
             }
             return true;

@@ -41,7 +41,7 @@ public class IOUringReactorBuilder extends ReactorBuilder {
      *
      * @param registerRingFd
      */
-    public void setRegisterRingFd(boolean registerRingFd){
+    public void setRegisterRingFd(boolean registerRingFd) {
         this.registerRing = registerRingFd;
     }
 
