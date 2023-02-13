@@ -18,13 +18,12 @@ package com.hazelcast.internal.tpc.iouring;
 
 import com.hazelcast.internal.tpc.AsyncSocket_LargePayloadTest;
 import com.hazelcast.internal.tpc.Reactor;
+import com.hazelcast.internal.tpc.ReactorBuilder;
 
 public class IOUringAsyncSocket_LargePayloadTest extends AsyncSocket_LargePayloadTest {
 
     @Override
-    public Reactor newReactor() {
-        IOUringReactor reactor = new IOUringReactor();
-        reactor.start();
-        return reactor;
+    public ReactorBuilder newReactorBuilder() {
+        return new IOUringReactorBuilder();
     }
 }

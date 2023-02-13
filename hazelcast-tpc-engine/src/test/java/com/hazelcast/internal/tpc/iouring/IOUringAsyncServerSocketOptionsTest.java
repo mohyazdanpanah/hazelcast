@@ -18,6 +18,7 @@ package com.hazelcast.internal.tpc.iouring;
 
 import com.hazelcast.internal.tpc.AsyncServerSocketOptionsTest;
 import com.hazelcast.internal.tpc.ReactorBuilder;
+import org.junit.Ignore;
 
 public class IOUringAsyncServerSocketOptionsTest extends AsyncServerSocketOptionsTest {
 

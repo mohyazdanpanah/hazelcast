@@ -47,11 +47,10 @@ public class IOUringAsyncSocketOptions implements AsyncSocketOptions {
                 return (T) (Integer) nativeSocket.getReceiveBufferSize();
             } else if (SO_SNDBUF.equals(option)) {
                 return (T) (Integer) nativeSocket.getSendBufferSize();
-//            } else if (SO_KEEPALIVE.equals(option)) {
-//                return (T) channel.getOption(StandardSocketOptions.SO_KEEPALIVE);
+            } else if (SO_KEEPALIVE.equals(option)) {
+                return (T) (Boolean) nativeSocket.isKeepAlive();
             } else if (SO_REUSEADDR.equals(option)) {
                 return (T) (Boolean) nativeSocket.isReuseAddress();
-            }
 //                return (T) (Integer) channel.socket().getSoTimeout();
 //            } else if (TCP_KEEPCOUNT.equals(option)) {
 //                    return (T) channel.getOption(JDK_NET_TCP_KEEPCOUNT);
@@ -59,10 +58,9 @@ public class IOUringAsyncSocketOptions implements AsyncSocketOptions {
 //                    return (T) channel.getOption(JDK_NET_TCP_KEEPINTERVAL);
 //            } else if (TCP_KEEPIDLE.equals(option)) {
 //                    return (T) channel.getOption(JDK_NET_TCP_KEEPIDLE);
-//            } else {
-//                throw new UnsupportedOperationException("Unrecognized option:" + option);
-            //           }
-            return null;
+            } else {
+                throw new UnsupportedOperationException("Unrecognized option:" + option);
+            }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -86,7 +84,7 @@ public class IOUringAsyncSocketOptions implements AsyncSocketOptions {
             } else if (SO_REUSEADDR.equals(option)) {
                 nativeSocket.setReuseAddress((Boolean) value);
 //            } else if (SO_TIMEOUT.equals(option)) {
-//                channel.socket().setSoTimeout((Integer) value);
+//                nativeSocket.setSoTimeout((Integer) value);
 //            } else if (TCP_KEEPCOUNT.equals(option)) {
 //                    channel.setOption(JDK_NET_TCP_KEEPCOUNT, (Integer) value);
 //            } else if (TCP_KEEPIDLE.equals(option)) {
