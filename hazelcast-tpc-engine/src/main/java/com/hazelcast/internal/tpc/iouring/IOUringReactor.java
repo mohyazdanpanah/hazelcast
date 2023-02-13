@@ -120,7 +120,6 @@ public class IOUringReactor extends Reactor {
     public AsyncSocketBuilder newAsyncSocketBuilder(AcceptRequest acceptRequest) {
         verifyRunning();
 
-
         IOUringAcceptRequest ioUringAcceptRequest
                 = checkInstanceOf(IOUringAcceptRequest.class, acceptRequest, "acceptRequest");
         return new IOUringAsyncSocketBuilder(this, ioUringAcceptRequest);

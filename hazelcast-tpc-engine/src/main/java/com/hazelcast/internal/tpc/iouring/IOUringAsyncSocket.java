@@ -49,8 +49,9 @@ public final class IOUringAsyncSocket extends AsyncSocket {
     }
 
     private final IOUringEventloop eventloop;
-
+    private final IOUringReactor reactor;
     private final Thread eventloopThread;
+    private final SubmissionQueue sq;
 
     private final Handler_OP_READ handler_OP_READ;
     private final long userdata_OP_READ;
@@ -62,14 +63,12 @@ public final class IOUringAsyncSocket extends AsyncSocket {
     private final long userdata_OP_WRITEV;
 
     private final NativeSocket nativeSocket;
-    private final IOUringReactor reactor;
     private final CircularQueue localTaskQueue;
 
     // ======================================================
     // For the reading side of the socket
     // ======================================================
     private final ByteBuffer receiveBuff;
-    private final SubmissionQueue sq;
 
     // ======================================================
     // for the writing side of the socket.
@@ -79,11 +78,12 @@ public final class IOUringAsyncSocket extends AsyncSocket {
     public final MpmcArrayQueue<IOBuffer> unflushedBufs = new MpmcArrayQueue<>(4096);
 
     // isolated state.
-    public final IOVector ioVector = new IOVector(IOV_MAX);
+    private final IOVector ioVector = new IOVector(IOV_MAX);
     private final EventloopTask eventloopTask = new EventloopTask();
     private final IOUringAsyncSocketOptions options;
     private final ReadHandler readHandler;
 
+    // only accessed from eventloop thread.
     private boolean started;
 
     IOUringAsyncSocket(IOUringAsyncSocketBuilder builder) {
