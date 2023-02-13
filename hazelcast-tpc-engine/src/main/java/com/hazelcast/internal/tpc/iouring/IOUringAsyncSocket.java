@@ -18,6 +18,7 @@ package com.hazelcast.internal.tpc.iouring;
 
 import com.hazelcast.internal.tpc.AsyncSocket;
 import com.hazelcast.internal.tpc.AsyncSocketOptions;
+import com.hazelcast.internal.tpc.ReadHandler;
 import com.hazelcast.internal.tpc.iobuffer.IOBuffer;
 import com.hazelcast.internal.tpc.util.CircularQueue;
 import org.jctools.queues.MpmcArrayQueue;
@@ -30,6 +31,7 @@ import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static com.hazelcast.internal.tpc.AsyncSocketOptions.SO_RCVBUF;
 import static com.hazelcast.internal.tpc.iouring.IOUring.IORING_OP_RECV;
 import static com.hazelcast.internal.tpc.iouring.IOUring.IORING_OP_SEND;
 import static com.hazelcast.internal.tpc.iouring.IOUring.IORING_OP_WRITEV;
@@ -80,11 +82,15 @@ public final class IOUringAsyncSocket extends AsyncSocket {
     public final IOVector ioVector = new IOVector(IOV_MAX);
     private final EventloopTask eventloopTask = new EventloopTask();
     private final IOUringAsyncSocketOptions options;
+    private final ReadHandler readHandler;
 
     private boolean started;
 
     IOUringAsyncSocket(IOUringAsyncSocketBuilder builder) {
         super(builder.clientSide);
+
+        assert Thread.currentThread() == builder.reactor.eventloopThread();
+
         this.nativeSocket = builder.nativeSocket;
         this.options = builder.options;
         if (!clientSide) {
@@ -97,18 +103,18 @@ public final class IOUringAsyncSocket extends AsyncSocket {
         this.sq = eventloop.sq;
         this.localTaskQueue = eventloop.localTaskQueue;
         this.eventloopThread = reactor.eventloopThread();
-        this.receiveBuff = ByteBuffer.allocateDirect(options.getReceiveBufferSize());
+        this.receiveBuff = ByteBuffer.allocateDirect(options.get(SO_RCVBUF));
 
-        handler_OP_READ = new Handler_OP_READ();
-        userdata_OP_READ = eventloop.nextPermanentHandlerId();
+        this.handler_OP_READ = new Handler_OP_READ();
+        this.userdata_OP_READ = eventloop.nextPermanentHandlerId();
         eventloop.handlers.put(userdata_OP_READ, handler_OP_READ);
 
-        handler_OP_WRITE = new Handler_OP_WRITE();
-        userdata_OP_WRITE = eventloop.nextPermanentHandlerId();
+        this.handler_OP_WRITE = new Handler_OP_WRITE();
+        this.userdata_OP_WRITE = eventloop.nextPermanentHandlerId();
         eventloop.handlers.put(userdata_OP_WRITE, handler_OP_WRITE);
 
-        handler_op_WRITEV = new Handler_OP_WRITEV();
-        userdata_OP_WRITEV = eventloop.nextPermanentHandlerId();
+        this.handler_op_WRITEV = new Handler_OP_WRITEV();
+        this.userdata_OP_WRITEV = eventloop.nextPermanentHandlerId();
         eventloop.handlers.put(userdata_OP_WRITEV, handler_op_WRITEV);
 
         // todo: deal with return value
@@ -116,7 +122,8 @@ public final class IOUringAsyncSocket extends AsyncSocket {
 
         // todo: on closing of the socket we need to deregister the event handlers.
 
-
+        this.readHandler = builder.readHandler;
+        readHandler.init(this);
     }
 
     @Override
@@ -124,7 +131,7 @@ public final class IOUringAsyncSocket extends AsyncSocket {
         return reactor;
     }
 
-    public NativeSocket socket() {
+    public NativeSocket nativeSocket() {
         return nativeSocket;
     }
 

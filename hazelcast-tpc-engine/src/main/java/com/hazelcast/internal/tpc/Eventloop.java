@@ -59,7 +59,7 @@ public abstract class Eventloop {
     protected final TpcLogger logger = TpcLoggerLocator.getLogger(getClass());
     protected final AtomicBoolean wakeupNeeded = new AtomicBoolean(true);
     protected final NanoClock nanoClock;
-    protected final PromiseAllocator promiseAllocator;
+    public final PromiseAllocator promiseAllocator;
     protected final Scheduler scheduler;
 
     protected long earliestDeadlineNanos = -1;

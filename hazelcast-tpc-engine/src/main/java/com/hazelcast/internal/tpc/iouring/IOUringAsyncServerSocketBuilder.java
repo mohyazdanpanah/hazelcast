@@ -29,9 +29,8 @@ import static com.hazelcast.internal.tpc.util.Preconditions.checkNotNull;
 public class IOUringAsyncServerSocketBuilder implements AsyncServerSocketBuilder {
 
     final IOUringReactor reactor;
-    final IOUringAsyncServerSocketOptions options;
     final NativeSocket nativeSocket;
-    final NioAsyncServerSocketOptions options;
+    final IOUringAsyncServerSocketOptions options;
     Consumer<AcceptRequest> acceptConsumer;
     private boolean build;
 
@@ -39,7 +38,6 @@ public class IOUringAsyncServerSocketBuilder implements AsyncServerSocketBuilder
         this.reactor = reactor;
         this.nativeSocket = NativeSocket.openTcpIpv4Socket();
         nativeSocket.setBlocking(true);
-
         this.options = new IOUringAsyncServerSocketOptions(nativeSocket);
     }
 
