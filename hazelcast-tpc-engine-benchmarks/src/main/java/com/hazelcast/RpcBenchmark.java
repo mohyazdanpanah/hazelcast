@@ -17,6 +17,7 @@
 package com.hazelcast;
 
 
+import com.hazelcast.internal.tpc.AcceptRequest;
 import com.hazelcast.internal.tpc.AsyncServerSocket;
 import com.hazelcast.internal.tpc.AsyncSocket;
 import com.hazelcast.internal.tpc.Reactor;
@@ -33,15 +34,17 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.util.concurrent.CountDownLatch;
+import java.util.function.Consumer;
 
 import static com.hazelcast.Util.constructComplete;
+import static com.hazelcast.internal.tpc.AsyncSocketOptions.TCP_NODELAY;
 
 /**
  * A very trivial benchmark to measure the throughput we can get with a RPC system.
  * <p>
  * JMH would be better; but for now this will give some insights.
  */
-public class NioRpcBenchmark {
+public class RpcBenchmark {
 
     public static int serverCpu = -1;
     public static int clientCpu = -1;
@@ -88,35 +91,43 @@ public class NioRpcBenchmark {
         Reactor clientReactor = reactorBuilder.build();
         clientReactor.start();
 
-        AsyncSocket clientSocket = clientReactor.openTcpAsyncSocket();
-        clientSocket.setTcpNoDelay(true);
-        clientSocket.setReadHandler(new ReadHandler() {
-            private final IOBufferAllocator responseAllocator = new NonConcurrentIOBufferAllocator(8, true);
-
-            @Override
-            public void onRead(ByteBuffer receiveBuffer) {
-                for (; ; ) {
-                    if (receiveBuffer.remaining() < BitUtil.SIZEOF_INT + BitUtil.SIZEOF_LONG) {
-                        return;
-                    }
-
-                    int size = receiveBuffer.getInt();
-                    long l = receiveBuffer.getLong();
-                    if (l == 0) {
-                        latch.countDown();
-                    } else {
-                        IOBuffer buf = responseAllocator.allocate(8);
-                        buf.writeInt(-1);
-                        buf.writeLong(l);
-                        constructComplete(buf);
-                        socket.unsafeWriteAndFlush(buf);
-                    }
-                }
-            }
-        });
+        AsyncSocket clientSocket = clientReactor.newAsyncSocketBuilder()
+                .set(TCP_NODELAY, true)
+                .setReadHandler(new ClientReadHandler(latch))
+                .build();
         clientSocket.start();
         clientSocket.connect(serverAddress).join();
         return clientSocket;
+    }
+
+    private static class ClientReadHandler extends ReadHandler {
+        private final IOBufferAllocator responseAllocator = new NonConcurrentIOBufferAllocator(8, true);
+        private final CountDownLatch latch;
+
+        public ClientReadHandler(CountDownLatch latch) {
+            this.latch = latch;
+        }
+
+        @Override
+        public void onRead(ByteBuffer receiveBuffer) {
+            for (; ; ) {
+                if (receiveBuffer.remaining() < BitUtil.SIZEOF_INT + BitUtil.SIZEOF_LONG) {
+                    return;
+                }
+
+                int size = receiveBuffer.getInt();
+                long l = receiveBuffer.getLong();
+                if (l == 0) {
+                    latch.countDown();
+                } else {
+                    IOBuffer buf = responseAllocator.allocate(8);
+                    buf.writeInt(-1);
+                    buf.writeLong(l);
+                    constructComplete(buf);
+                    socket.unsafeWriteAndFlush(buf);
+                }
+            }
+        }
     }
 
     private static AsyncServerSocket newServer(SocketAddress serverAddress) {
@@ -128,34 +139,43 @@ public class NioRpcBenchmark {
         Reactor serverReactor = reactorBuilder.build();
         serverReactor.start();
 
-        AsyncServerSocket serverSocket = serverReactor.openTcpAsyncServerSocket();
-        serverSocket.bind(serverAddress);
-        serverSocket.accept(acceptRequest -> {
-            AsyncSocket socket = serverReactor.openAsyncSocket(acceptRequest);
-            socket.setTcpNoDelay(true);
-            socket.setReadHandler(new ReadHandler() {
-                private final IOBufferAllocator responseAllocator = new NonConcurrentIOBufferAllocator(8, true);
-
-                @Override
-                public void onRead(ByteBuffer receiveBuffer) {
-                    for (; ; ) {
-                        if (receiveBuffer.remaining() < BitUtil.SIZEOF_INT + BitUtil.SIZEOF_LONG) {
-                            return;
-                        }
-                        int size = receiveBuffer.getInt();
-                        long l = receiveBuffer.getLong();
-
-                        IOBuffer buf = responseAllocator.allocate(8);
-                        buf.writeInt(-1);
-                        buf.writeLong(l - 1);
-                        constructComplete(buf);
-                        socket.unsafeWriteAndFlush(buf);
+        AsyncServerSocket serverSocket = serverReactor
+                .newAsyncServerSocketBuilder()
+                .setAcceptConsumer(new Consumer<AcceptRequest>() {
+                    @Override
+                    public void accept(AcceptRequest acceptRequest) {
+                        AsyncSocket socket = serverReactor.newAsyncSocketBuilder(acceptRequest)
+                                .setReadHandler(new ServerReadHandler())
+                                .set(TCP_NODELAY, true)
+                                .build();
+                        socket.start();
                     }
-                }
-            });
-            socket.start();
-        });
+                })
+                .build();
+        serverSocket.bind(serverAddress);
+        serverReactor.start();
 
         return serverSocket;
+    }
+
+    private static class ServerReadHandler extends ReadHandler {
+        private final IOBufferAllocator responseAllocator = new NonConcurrentIOBufferAllocator(8, true);
+
+        @Override
+        public void onRead(ByteBuffer receiveBuffer) {
+            for (; ; ) {
+                if (receiveBuffer.remaining() < BitUtil.SIZEOF_INT + BitUtil.SIZEOF_LONG) {
+                    return;
+                }
+                int size = receiveBuffer.getInt();
+                long l = receiveBuffer.getLong();
+
+                IOBuffer buf = responseAllocator.allocate(8);
+                buf.writeInt(-1);
+                buf.writeLong(l - 1);
+                constructComplete(buf);
+                socket.unsafeWriteAndFlush(buf);
+            }
+        }
     }
 }

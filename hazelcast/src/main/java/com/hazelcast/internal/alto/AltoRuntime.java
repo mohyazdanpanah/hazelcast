@@ -24,10 +24,12 @@ import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.internal.server.ServerConnectionManager;
 import com.hazelcast.internal.server.tcp.TcpServer;
 import com.hazelcast.internal.server.tcp.TcpServerConnection;
+import com.hazelcast.internal.tpc.AcceptRequest;
 import com.hazelcast.internal.tpc.AsyncServerSocket;
 import com.hazelcast.internal.tpc.AsyncSocket;
+import com.hazelcast.internal.tpc.AsyncSocketBuilder;
+import com.hazelcast.internal.tpc.AsyncSocketOptions;
 import com.hazelcast.internal.tpc.Configuration;
-import com.hazelcast.internal.tpc.Eventloop;
 import com.hazelcast.internal.tpc.Reactor;
 import com.hazelcast.internal.tpc.ReactorBuilder;
 import com.hazelcast.internal.tpc.ReactorType;
@@ -40,6 +42,7 @@ import com.hazelcast.internal.tpc.iobuffer.NonConcurrentIOBufferAllocator;
 import com.hazelcast.internal.tpc.iobuffer.UnpooledIOBufferAllocator;
 import com.hazelcast.internal.tpc.iouring.IOUringReactorBuilder;
 import com.hazelcast.internal.tpc.nio.NioAsyncSocket;
+import com.hazelcast.internal.tpc.nio.NioAsyncSocketBuilder;
 import com.hazelcast.internal.tpc.nio.NioReactorBuilder;
 import com.hazelcast.internal.util.HashUtil;
 import com.hazelcast.logging.ILogger;
@@ -56,9 +59,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static com.hazelcast.internal.alto.FrameCodec.OFFSET_REQ_CALL_ID;
+import static com.hazelcast.internal.tpc.AsyncSocketOptions.SO_KEEPALIVE;
+import static com.hazelcast.internal.tpc.AsyncSocketOptions.SO_RCVBUF;
+import static com.hazelcast.internal.tpc.AsyncSocketOptions.SO_REUSEADDR;
+import static com.hazelcast.internal.tpc.AsyncSocketOptions.SO_SNDBUF;
+import static com.hazelcast.internal.tpc.AsyncSocketOptions.TCP_NODELAY;
 import static java.lang.Boolean.parseBoolean;
 import static java.lang.Integer.parseInt;
 import static java.lang.System.getProperty;
@@ -234,24 +243,27 @@ public class AltoRuntime {
 
                 int port = toPort(thisAddress, k);
                 tpcPorts.add(port);
-                AsyncServerSocket serverSocket = reactor.openTcpAsyncServerSocket();
-                serverSocket.setReceiveBufferSize(socketConfig.receiveBufferSize);
-                serverSocket.setReuseAddress(true);
+                AsyncServerSocket serverSocket = reactor.newAsyncServerSocketBuilder()
+                        .set(SO_RCVBUF, socketConfig.receiveBufferSize)
+                        .set(SO_REUSEADDR, true)
+                        .setAcceptConsumer(acceptRequest -> {
+                            AsyncSocketBuilder socketBuilder = reactor.newAsyncSocketBuilder(acceptRequest)
+                                    .set(SO_RCVBUF, socketConfig.receiveBufferSize)
+                                    .set(SO_SNDBUF, socketConfig.sendBufferSize)
+                                    .set(TCP_NODELAY,socketConfig.tcpNoDelay)
+                                    .set(SO_KEEPALIVE, true)
+                                    .setReadHandler(readHandlerSuppliers.get(reactor).get());
+                            if (socketBuilder instanceof NioAsyncSocketBuilder) {
+                                NioAsyncSocketBuilder nioSocketBUilder = (NioAsyncSocketBuilder) socketBuilder;
+                                nioSocketBUilder.setWriteThrough(writeThrough);
+                                nioSocketBUilder.setRegularSchedule(regularSchedule);
+                            }
+                            AsyncSocket socket = socketBuilder.build();
+                            socket.start();
+                        })
+                        .build();
                 serverSocket.bind(new InetSocketAddress(thisAddress.getInetAddress(), port));
-                serverSocket.accept(acceptRequest -> {
-                    AsyncSocket socket= reactor.openAsyncSocket(acceptRequest);
-                    if (socket instanceof NioAsyncSocket) {
-                        NioAsyncSocket nioSocket = (NioAsyncSocket) socket;
-                        nioSocket.setWriteThrough(writeThrough);
-                        nioSocket.setRegularSchedule(regularSchedule);
-                    }
-                    socket.setReadHandler(readHandlerSuppliers.get(reactor).get());
-                    socket.setSendBufferSize(socketConfig.sendBufferSize);
-                    socket.setReceiveBufferSize(socketConfig.receiveBufferSize);
-                    socket.setTcpNoDelay(socketConfig.tcpNoDelay);
-                    socket.setKeepAlive(true);
-                    socket.start();
-                });
+                serverSocket.start();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
@@ -358,23 +370,25 @@ public class AltoRuntime {
                 if (connection.getSockets() == null) {
                     long start = System.currentTimeMillis();
                     List<Integer> remoteTpcPorts = connection.getRemoteTpcPorts();
-                    System.out.println("Alto runtime getting remote tpc ports:"+ remoteTpcPorts);
+                    System.out.println("Alto runtime getting remote tpc ports:" + remoteTpcPorts);
 
                     AsyncSocket[] sockets = new AsyncSocket[remoteTpcPorts.size()];
                     for (int socketIndex = 0; socketIndex < remoteTpcPorts.size(); socketIndex++) {
                         int reactorIndex = HashUtil.hashToIndex(socketIndex, tpcEngine.reactorCount());
                         Reactor reactor = tpcEngine.reactor(reactorIndex);
 
-                        AsyncSocket socket = reactor.openTcpAsyncSocket();
-                        if (socket instanceof NioAsyncSocket) {
-                            NioAsyncSocket nioSocket = (NioAsyncSocket) socket;
-                            nioSocket.setWriteThrough(writeThrough);
-                            nioSocket.setRegularSchedule(regularSchedule);
+                        AsyncSocketBuilder socketBuilder = reactor.newAsyncSocketBuilder()
+                                .setReadHandler(readHandlerSuppliers.get(reactor).get())
+                                .set(SO_SNDBUF,  socketConfig.sendBufferSize)
+                                .set(SO_RCVBUF, socketConfig.receiveBufferSize)
+                                .set(TCP_NODELAY, socketConfig.tcpNoDelay);
+
+                        if (socketBuilder instanceof NioAsyncSocketBuilder) {
+                            NioAsyncSocketBuilder nioSocketBuilder = (NioAsyncSocketBuilder) socketBuilder;
+                            nioSocketBuilder.setWriteThrough(writeThrough);
+                            nioSocketBuilder.setRegularSchedule(regularSchedule);
                         }
-                        socket.setReadHandler(readHandlerSuppliers.get(reactor).get());
-                        socket.setSendBufferSize(socketConfig.sendBufferSize);
-                        socket.setReceiveBufferSize(socketConfig.receiveBufferSize);
-                        socket.setTcpNoDelay(socketConfig.tcpNoDelay);
+                        AsyncSocket socket = socketBuilder.build();
                         socket.start();
                         sockets[socketIndex] = socket;
                     }
@@ -389,7 +403,7 @@ public class AltoRuntime {
                     for (int socketIndex = 0; socketIndex < futures.length; socketIndex++) {
                         CompletableFuture future = futures[socketIndex];
                         future.join();
-                        System.out.println(sockets[socketIndex] +" accepted.");
+                        System.out.println(sockets[socketIndex] + " accepted.");
                     }
 
                     connection.setSockets(sockets);

@@ -18,8 +18,6 @@ package com.hazelcast.internal.tpc.iouring;
 
 import com.hazelcast.internal.tpc.AsyncSocketOptions;
 import com.hazelcast.internal.tpc.Option;
-import com.hazelcast.internal.tpc.logging.TpcLogger;
-import com.hazelcast.internal.tpc.logging.TpcLoggerLocator;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -30,7 +28,6 @@ import static com.hazelcast.internal.tpc.util.Preconditions.checkNotNull;
 public class IOUringAsyncSocketOptions implements AsyncSocketOptions {
 
     private final NativeSocket nativeSocket;
-    private final TpcLogger logger = TpcLoggerLocator.getLogger(getClass());
 
     IOUringAsyncSocketOptions(NativeSocket nativeSocket) {
         this.nativeSocket = nativeSocket;
@@ -51,18 +48,17 @@ public class IOUringAsyncSocketOptions implements AsyncSocketOptions {
                 return (T) (Boolean) nativeSocket.isKeepAlive();
             } else if (SO_REUSEADDR.equals(option)) {
                 return (T) (Boolean) nativeSocket.isReuseAddress();
-//                return (T) (Integer) channel.socket().getSoTimeout();
-//            } else if (TCP_KEEPCOUNT.equals(option)) {
-//                    return (T) channel.getOption(JDK_NET_TCP_KEEPCOUNT);
-//            } else if (TCP_KEEPINTERVAL.equals(option)) {
-//                    return (T) channel.getOption(JDK_NET_TCP_KEEPINTERVAL);
-//            } else if (TCP_KEEPIDLE.equals(option)) {
-//                    return (T) channel.getOption(JDK_NET_TCP_KEEPIDLE);
+            } else if (TCP_KEEPCOUNT.equals(option)) {
+                return (T) (Integer) nativeSocket.getTcpKeepaliveProbes();
+            } else if (TCP_KEEPINTERVAL.equals(option)) {
+                return (T) (Integer) nativeSocket.getTcpKeepaliveIntvl();
+            } else if (TCP_KEEPIDLE.equals(option)) {
+                return (T) (Integer) nativeSocket.getTcpKeepAliveTime();
             } else {
                 throw new UnsupportedOperationException("Unrecognized option:" + option);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            throw new UncheckedIOException("Failed to getOption [" + option.name() + "]", e);
         }
     }
 
@@ -85,12 +81,12 @@ public class IOUringAsyncSocketOptions implements AsyncSocketOptions {
                 nativeSocket.setReuseAddress((Boolean) value);
 //            } else if (SO_TIMEOUT.equals(option)) {
 //                nativeSocket.setSoTimeout((Integer) value);
-//            } else if (TCP_KEEPCOUNT.equals(option)) {
-//                    channel.setOption(JDK_NET_TCP_KEEPCOUNT, (Integer) value);
-//            } else if (TCP_KEEPIDLE.equals(option)) {
-//                    channel.setOption(JDK_NET_TCP_KEEPIDLE, (Integer) value);
-//            } else if (TCP_KEEPINTERVAL.equals(option)) {
-//                    channel.setOption(JDK_NET_TCP_KEEPINTERVAL, (Integer) value);
+            } else if (TCP_KEEPCOUNT.equals(option)) {
+                nativeSocket.setTcpKeepAliveProbes((Integer) value);
+            } else if (TCP_KEEPIDLE.equals(option)) {
+                nativeSocket.setTcpKeepAliveTime((Integer) value);
+            } else if (TCP_KEEPINTERVAL.equals(option)) {
+                nativeSocket.setTcpKeepaliveIntvl((Integer) value);
             } else {
                 throw new UnsupportedOperationException("Unrecognized option:" + option);
             }

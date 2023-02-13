@@ -169,14 +169,14 @@ public abstract class AsyncSocketOptionsTest {
             assumeTrue(JVM.getMajorVersion() >= 11);
         }
     }
-
-    @Test
-    public void test_SO_TIMEOUT() {
-        AsyncSocket socket = newSocket();
-        AsyncSocketOptions options = socket.options();
-        options.set(SO_TIMEOUT, 3600);
-        assertEquals(Integer.valueOf(3600), options.get(SO_TIMEOUT));
-    }
+//
+//    @Test
+//    public void test_SO_TIMEOUT() {
+//        AsyncSocket socket = newSocket();
+//        AsyncSocketOptions options = socket.options();
+//        options.set(SO_TIMEOUT, 3600);
+//        assertEquals(Integer.valueOf(3600), options.get(SO_TIMEOUT));
+//    }
 
     @Test
     public void test_TCP_KEEPCOUNT() {

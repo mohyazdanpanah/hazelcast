@@ -302,9 +302,6 @@ public final class IOUringAsyncSocket extends AsyncSocket {
         if (logger.isFineEnabled()) {
             logger.fine("Connect to address:" + address);
         }
-        if (reactor == null) {
-            throw new IllegalStateException("Can't connect, IOUringAsyncSocket isn't activated.");
-        }
 
         CompletableFuture<Void> future = new CompletableFuture<>();
         try {
