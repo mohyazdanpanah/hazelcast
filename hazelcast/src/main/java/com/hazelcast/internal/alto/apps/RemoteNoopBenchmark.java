@@ -9,6 +9,8 @@ import com.hazelcast.table.Table;
  * network level when concurrency level is set higher than 1.
  */
 public class RemoteNoopBenchmark {
+    public final static long operations = 1000000;
+    public final static int concurrency = 1;
 
     public static void main(String[] args) throws Exception {
         System.setProperty("hazelcast.alto.enabled", "true");
@@ -23,9 +25,7 @@ public class RemoteNoopBenchmark {
 
         Table table = localNode.getTable("sometable");
 
-        long operations = 1000000;
-        int concurrency = 1;
-        long iterations = operations / concurrency;
+         long iterations = operations / concurrency;
 
         long startMs = System.currentTimeMillis();
         long count = 0;

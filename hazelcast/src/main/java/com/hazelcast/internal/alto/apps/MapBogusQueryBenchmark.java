@@ -21,15 +21,15 @@ import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.table.Table;
 
 public class MapBogusQueryBenchmark {
+    public final static int items = 1_000_000;
+    public final static int queryCount = 2000;
 
     public static void main(String[] args) throws Exception {
-        System.setProperty("hazelcast.alto.enabled","true");
+        System.setProperty("hazelcast.alto.enabled", "true");
         HazelcastInstance node1 = Hazelcast.newHazelcastInstance();
         HazelcastInstance node2 = Hazelcast.newHazelcastInstance();
 
         Table table = node1.getTable("sometable");
-
-        int items = 1_000_000;
 
         for (int k = 0; k < items; k++) {
             if (k % 100000 == 0) {

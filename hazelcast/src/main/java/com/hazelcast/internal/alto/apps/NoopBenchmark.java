@@ -26,7 +26,7 @@ public class NoopBenchmark {
 
     public static void main(String[] args) throws Exception {
         System.setProperty("hazelcast.alto.enabled", "true");
-        System.setProperty("hazelcast.tpc.reactor.count", "10");
+        System.setProperty("hazelcast.tpc.reactor.count", "1");
 
         HazelcastInstance node1 = Hazelcast.newHazelcastInstance();
         HazelcastInstance node2 = Hazelcast.newHazelcastInstance();
