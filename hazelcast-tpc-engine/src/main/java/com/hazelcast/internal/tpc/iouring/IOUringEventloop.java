@@ -25,18 +25,18 @@ public class IOUringEventloop extends Eventloop {
     private final IOUringReactor ioUringReactor;
     private final StorageDeviceRegistry storageScheduler;
 
-    private IOUring uring;
+    private final IOUring uring;
 
     final LongObjectHashMap<IOCompletionHandler> handlers = new LongObjectHashMap<>(4096);
 
     // this is not a very efficient allocator. It would be better to allocate a large chunk of
     // memory and then carve out smaller blocks. But for now it will do.
-    private IOBufferAllocator storeIOBufferAllocator = new NonConcurrentIOBufferAllocator(4096, true, pageSize());
-    SubmissionQueue sq;
-    private CompletionQueue cq;
-    private EventloopHandler eventLoopHandler;
-    private long userdata_eventRead;
-    private long userdata_timeout;
+    private final IOBufferAllocator storeIOBufferAllocator = new NonConcurrentIOBufferAllocator(4096, true, pageSize());
+    final SubmissionQueue sq;
+    private final CompletionQueue cq;
+    private final EventloopHandler eventLoopHandler;
+    private final long userdata_eventRead;
+    private final long userdata_timeout;
     private final long timeoutSpecAddr = UNSAFE.allocateMemory(Linux.SIZEOF_KERNEL_TIMESPEC);
 
     final EventFd eventfd = new EventFd();
@@ -45,10 +45,29 @@ public class IOUringEventloop extends Eventloop {
     private long permanentHandlerIdGenerator = 0;
     private long temporaryHandlerIdGenerator = -1;
 
-    public IOUringEventloop(IOUringReactor ioUringReactor, IOUringReactorBuilder builder) {
-        super(ioUringReactor, builder);
-        this.ioUringReactor = ioUringReactor;
-        this.storageScheduler = ioUringReactor.storageScheduler;
+    public IOUringEventloop(IOUringReactor reactor, IOUringReactorBuilder builder) {
+        super(reactor, builder);
+        this.ioUringReactor = reactor;
+        this.storageScheduler = reactor.storageScheduler;
+
+        // The uring instance needs to be created on the eventloop thread.
+        // This is required for some of the setup flags.
+        this.uring = new IOUring(builder.entries, builder.setupFlags);
+        if (builder.registerRing) {
+            this.uring.registerRingFd();
+        }
+        this.sq = uring.getSubmissionQueue();
+        this.cq = uring.getCompletionQueue();
+
+        this.eventLoopHandler = new EventloopHandler();
+        //todo: ugly, should not be null
+        if(storageScheduler!=null) {
+            storageScheduler.init(this);
+        }
+        this.userdata_eventRead = nextPermanentHandlerId();
+        this.userdata_timeout = nextPermanentHandlerId();
+        handlers.put(userdata_eventRead, new EventFdCompletionHandler());
+        handlers.put(userdata_timeout, new TimeoutCompletionHandler());
     }
 
     /**
@@ -82,30 +101,7 @@ public class IOUringEventloop extends Eventloop {
     }
 
     @Override
-    protected void beforeEventloop() {
-        IOUringReactorBuilder builder = (IOUringReactorBuilder) this.builder;
-        // The uring instance needs to be created on the eventloop thread.
-        // This is required for some of the setup flags.
-        this.uring = new IOUring(builder.entries, builder.setupFlags);
-        if (builder.registerRing) {
-            this.uring.registerRingFd();
-        }
-        this.sq = uring.getSubmissionQueue();
-        this.cq = uring.getCompletionQueue();
-
-        this.eventLoopHandler = new EventloopHandler();
-        //todo: ugly, should not be null
-        if(storageScheduler!=null) {
-            storageScheduler.init(this);
-        }
-        this.userdata_eventRead = nextPermanentHandlerId();
-        this.userdata_timeout = nextPermanentHandlerId();
-        handlers.put(userdata_eventRead, new EventFdCompletionHandler());
-        handlers.put(userdata_timeout, new TimeoutCompletionHandler());
-    }
-
-    @Override
-    protected void eventloop() throws Exception {
+    protected void run() throws Exception {
         final NanoClock nanoClock = this.nanoClock;
         final EventloopHandler eventLoopHandler = this.eventLoopHandler;
         final AtomicBoolean wakeupNeeded = this.wakeupNeeded;
@@ -161,7 +157,7 @@ public class IOUringEventloop extends Eventloop {
     }
 
     @Override
-    protected void afterEventloop() {
+    protected void destroy() {
         closeQuietly(uring);
         closeQuietly(eventfd);
         closeAllQuietly(ioUringReactor.closeables);

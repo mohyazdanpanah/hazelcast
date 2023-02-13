@@ -64,7 +64,6 @@ public abstract class Eventloop {
 
     protected long earliestDeadlineNanos = -1;
     protected boolean stop;
-    public final PromiseAllocator promiseAllocator;
 
     public Eventloop(Reactor reactor, ReactorBuilder builder) {
         this.reactor = reactor;

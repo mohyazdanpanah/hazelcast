@@ -18,7 +18,9 @@ package com.hazelcast.internal.tpc.iouring;
 
 import com.hazelcast.internal.tpc.AcceptRequest;
 import com.hazelcast.internal.tpc.AsyncServerSocket;
+import com.hazelcast.internal.tpc.AsyncServerSocketBuilder;
 import com.hazelcast.internal.tpc.AsyncSocket;
+import com.hazelcast.internal.tpc.AsyncSocketBuilder;
 import com.hazelcast.internal.tpc.Eventloop;
 import com.hazelcast.internal.tpc.Reactor;
 import com.hazelcast.internal.tpc.ReactorBuilder;
@@ -106,25 +108,32 @@ public class IOUringReactor extends Reactor {
     }
 
     @Override
-    public AsyncServerSocket openTcpAsyncServerSocket() {
-        return new IOUringAsyncServerSocket(this);
-    }
-
-    @Override
-    public AsyncSocket openTcpAsyncSocket() {
-        return new IOUringAsyncSocket(this,null);
-    }
-
-    @Override
-    public AsyncSocket openAsyncSocket(AcceptRequest acceptRequest) {
-       IOUringAcceptRequest ioUringAcceptRequest
-               = checkInstanceOf(IOUringAcceptRequest.class, acceptRequest,"acceptRequest");
-       return new IOUringAsyncSocket(this, ioUringAcceptRequest);
-    }
-
-    @Override
-    protected IOUringEventloop createEventloop(ReactorBuilder builder) {
+    protected Eventloop newEventloop(ReactorBuilder builder) {
         return new IOUringEventloop(this, (IOUringReactorBuilder) builder);
+    }
+
+    @Override
+    public AsyncSocketBuilder newAsyncSocketBuilder() {
+        verifyRunning();
+
+        return new IOUringAsyncSocketBuilder(this, null);
+    }
+
+    @Override
+    public AsyncSocketBuilder newAsyncSocketBuilder(AcceptRequest acceptRequest) {
+        verifyRunning();
+
+
+        IOUringAcceptRequest ioUringAcceptRequest
+                = checkInstanceOf(IOUringAcceptRequest.class, acceptRequest,"acceptRequest");
+        return new IOUringAsyncSocketBuilder(this, ioUringAcceptRequest);
+    }
+
+    @Override
+    public AsyncServerSocketBuilder newAsyncServerSocketBuilder() {
+        verifyRunning();
+
+        return new IOUringAsyncServerSocketBuilder(this);
     }
 
     @Override

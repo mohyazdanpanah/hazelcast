@@ -18,6 +18,7 @@ package com.hazelcast.internal.tpc.iouring;
 
 import com.hazelcast.internal.tpc.AcceptRequest;
 import com.hazelcast.internal.tpc.AsyncServerSocket;
+import com.hazelcast.internal.tpc.AsyncSocketOptions;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -38,21 +39,24 @@ import static com.hazelcast.internal.tpc.util.Preconditions.checkNotNull;
  */
 public final class IOUringAsyncServerSocket extends AsyncServerSocket {
 
-    private final NativeSocket serverSocket;
+    private final NativeSocket nativeSocket;
 
     private final IOUringReactor reactor;
     private final AcceptMemory acceptMemory = new AcceptMemory();
     private final IOUringEventloop eventloop;
     private final SubmissionQueue sq;
-    private Consumer<AcceptRequest> consumer;
+    private final Consumer<AcceptRequest> acceptRequestConsumer;
+    private final IOUringAsyncServerSocketOptions options;
+
     private long userdata_acceptHandler;
     private boolean bind = false;
 
-    IOUringAsyncServerSocket(IOUringReactor reactor) {
-        this.reactor = checkNotNull(reactor);
+    IOUringAsyncServerSocket(IOUringAsyncServerSocketBuilder builder) {
+        this.reactor = builder.reactor;
         this.eventloop = (IOUringEventloop)reactor.eventloop();
-        this.serverSocket = NativeSocket.openTcpIpv4Socket();
-        serverSocket.setBlocking(true);
+        this.options = builder.options;
+        this.nativeSocket = builder.nativeSocket;
+        this.acceptRequestConsumer = builder.acceptConsumer;
         this.sq = eventloop.sq;
         if (!reactor.registerCloseable(this)) {
             close();
@@ -72,8 +76,8 @@ public final class IOUringAsyncServerSocket extends AsyncServerSocket {
      *
      * @return the {@link NativeSocket}.
      */
-    public NativeSocket serverSocket() {
-        return serverSocket;
+    public NativeSocket nativeSocket() {
+        return nativeSocket;
     }
 
     @Override
@@ -81,7 +85,7 @@ public final class IOUringAsyncServerSocket extends AsyncServerSocket {
         if (!bind) {
             return -1;
         } else {
-            return serverSocket.getLocalAddress().getPort();
+            return nativeSocket.getLocalAddress().getPort();
         }
     }
 
@@ -95,68 +99,14 @@ public final class IOUringAsyncServerSocket extends AsyncServerSocket {
         if (!bind) {
             return null;
         } else {
-            return serverSocket.getLocalAddress();
-        }
-    }
-
-    @Override
-    public boolean isReusePort() {
-        try {
-            return serverSocket.isReusePort();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    @Override
-    public void setReusePort(boolean reusePort) {
-        try {
-            serverSocket.setReusePort(reusePort);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    @Override
-    public boolean isReuseAddress() {
-        try {
-            return serverSocket.isReuseAddress();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    @Override
-    public void setReuseAddress(boolean reuseAddress) {
-        try {
-            serverSocket.setReuseAddress(reuseAddress);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    @Override
-    public void setReceiveBufferSize(int size) {
-        try {
-            serverSocket.setReceiveBufferSize(size);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    @Override
-    public int getReceiveBufferSize() {
-        try {
-            return serverSocket.getReceiveBufferSize();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            return nativeSocket.getLocalAddress();
         }
     }
 
     @Override
     protected void close0() throws IOException {
         reactor.deregisterCloseable(this);
-        serverSocket.close();
+        nativeSocket.close();
     }
 
     @Override
@@ -165,25 +115,28 @@ public final class IOUringAsyncServerSocket extends AsyncServerSocket {
         checkNotNegative(backlog, "backlog");
 
         try {
-            boolean blocking = serverSocket.isBlocking();
-            serverSocket.setBlocking(true);
-            serverSocket.bind(localAddress);
-            serverSocket.listen(backlog);
-            serverSocket.setBlocking(blocking);
+            boolean blocking = nativeSocket.isBlocking();
+            nativeSocket.setBlocking(true);
+            nativeSocket.bind(localAddress);
+            nativeSocket.listen(backlog);
+            nativeSocket.setBlocking(blocking);
             bind = true;
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
-    public void accept(Consumer<AcceptRequest> consumer) {
-        checkNotNull(consumer, "consumer");
+    @Override
+    public AsyncSocketOptions options() {
+        return options;
+    }
 
+    @Override
+    public void start() {
         CompletableFuture future = new CompletableFuture();
         reactor.execute(() -> {
             try {
-                this.consumer = consumer;
-                if (!sq_offer_OP_ACCEPT()) {
+                 if (!sq_offer_OP_ACCEPT()) {
                     throw new IllegalStateException("Submission queue rejected the OP_ACCEPT");
                 }
                 if (logger.isInfoEnabled()) {
@@ -194,7 +147,7 @@ public final class IOUringAsyncServerSocket extends AsyncServerSocket {
                 future.completeExceptionally(e);
             }
         });
-         future.join();
+        future.join();
     }
 
     private boolean sq_offer_OP_ACCEPT() {
@@ -202,7 +155,7 @@ public final class IOUringAsyncServerSocket extends AsyncServerSocket {
                 IORING_OP_ACCEPT,
                 0,
                 SOCK_NONBLOCK | SOCK_CLOEXEC,
-                serverSocket.fd(),
+                nativeSocket.fd(),
                 acceptMemory.memoryAddress,
                 0,
                 acceptMemory.lengthMemoryAddress,
@@ -230,7 +183,7 @@ public final class IOUringAsyncServerSocket extends AsyncServerSocket {
                 // We should use the address to determine the type
                 NativeSocket socket = new NativeSocket(res, AF_INET);
                 AcceptRequest acceptRequest = new IOUringAcceptRequest(socket);
-                consumer.accept(acceptRequest);
+                acceptRequestConsumer.accept(acceptRequest);
 
                 // we need to reregister for more accepts.
                 sq_offer_OP_ACCEPT();

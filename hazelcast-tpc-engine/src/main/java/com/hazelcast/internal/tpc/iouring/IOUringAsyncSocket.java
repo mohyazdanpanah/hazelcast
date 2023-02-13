@@ -17,6 +17,7 @@
 package com.hazelcast.internal.tpc.iouring;
 
 import com.hazelcast.internal.tpc.AsyncSocket;
+import com.hazelcast.internal.tpc.AsyncSocketOptions;
 import com.hazelcast.internal.tpc.iobuffer.IOBuffer;
 import com.hazelcast.internal.tpc.util.CircularQueue;
 import org.jctools.queues.MpmcArrayQueue;
@@ -47,7 +48,6 @@ public final class IOUringAsyncSocket extends AsyncSocket {
 
     private final IOUringEventloop eventloop;
 
-
     private final Thread eventloopThread;
 
     private final Handler_OP_READ handler_OP_READ;
@@ -59,14 +59,14 @@ public final class IOUringAsyncSocket extends AsyncSocket {
     private final Handler_OP_WRITEV handler_op_WRITEV;
     private final long userdata_OP_WRITEV;
 
-    private final NativeSocket socket;
+    private final NativeSocket nativeSocket;
     private final IOUringReactor reactor;
     private final CircularQueue localTaskQueue;
 
     // ======================================================
     // For the reading side of the socket
     // ======================================================
-    private ByteBuffer receiveBuff;
+    private final ByteBuffer receiveBuff;
     private final SubmissionQueue sq;
 
     // ======================================================
@@ -79,23 +79,26 @@ public final class IOUringAsyncSocket extends AsyncSocket {
     // isolated state.
     public final IOVector ioVector = new IOVector(IOV_MAX);
     private final EventloopTask eventloopTask = new EventloopTask();
+    private final IOUringAsyncSocketOptions options;
+
     private boolean started;
 
-    public IOUringAsyncSocket(IOUringReactor reactor, IOUringAcceptRequest acceptRequest) {
-        if (acceptRequest == null) {
-            this.socket = NativeSocket.openTcpIpv4Socket();
-            this.clientSide = true;
-        } else {
-            this.socket = acceptRequest.socket;
-            this.remoteAddress = socket.getRemoteAddress();
-            this.localAddress = socket.getLocalAddress();
-            this.clientSide = false;
+    IOUringAsyncSocket(IOUringAsyncSocketBuilder builder) {
+        super(builder.clientSide);
+        this.nativeSocket = builder.nativeSocket;
+        this.options = builder.options;
+        if (!clientSide) {
+            this.localAddress = nativeSocket.getLocalAddress();
+            this.remoteAddress = nativeSocket.getRemoteAddress();
         }
 
-        this.reactor = reactor;
+        this.reactor = builder.reactor;
         this.eventloop = (IOUringEventloop) reactor.eventloop();
+        this.sq = eventloop.sq;
         this.localTaskQueue = eventloop.localTaskQueue;
         this.eventloopThread = reactor.eventloopThread();
+        this.receiveBuff = ByteBuffer.allocateDirect(options.getReceiveBufferSize());
+
         handler_OP_READ = new Handler_OP_READ();
         userdata_OP_READ = eventloop.nextPermanentHandlerId();
         eventloop.handlers.put(userdata_OP_READ, handler_OP_READ);
@@ -113,8 +116,7 @@ public final class IOUringAsyncSocket extends AsyncSocket {
 
         // todo: on closing of the socket we need to deregister the event handlers.
 
-        sq = this.eventloop.sq;
-        receiveBuff = ByteBuffer.allocateDirect(getReceiveBufferSize());
+
     }
 
     @Override
@@ -123,133 +125,12 @@ public final class IOUringAsyncSocket extends AsyncSocket {
     }
 
     public NativeSocket socket() {
-        return socket;
+        return nativeSocket;
     }
 
     @Override
-    public void setKeepAlive(boolean keepAlive) {
-        try {
-            socket.setKeepAlive(keepAlive);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    @Override
-    public boolean isKeepAlive() {
-        try {
-            return socket.isKeepAlive();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    @Override
-    public boolean isTcpNoDelay() {
-        try {
-            return socket.isTcpNoDelay();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    @Override
-    public void setTcpNoDelay(boolean tcpNoDelay) {
-        try {
-            socket.setTcpNoDelay(tcpNoDelay);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    @Override
-    public int getReceiveBufferSize() {
-        try {
-            return socket.getReceiveBufferSize();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    @Override
-    public void setReceiveBufferSize(int size) {
-        try {
-            socket.setReceiveBufferSize(size);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    @Override
-    public int getSendBufferSize() {
-        try {
-            return socket.getSendBufferSize();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    @Override
-    public void setSendBufferSize(int size) {
-        try {
-            socket.setSendBufferSize(size);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    @Override
-    public void setTcpKeepAliveTime(int keepAliveTime) {
-        try {
-            socket.setTcpKeepAliveTime(keepAliveTime);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    @Override
-    public int getTcpKeepAliveTime() {
-        try {
-            return socket.getTcpKeepAliveTime();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    @Override
-    public void setTcpKeepaliveIntvl(int keepaliveIntvl) {
-        try {
-            socket.setTcpKeepaliveIntvl(keepaliveIntvl);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    @Override
-    public int getTcpKeepaliveIntvl() {
-        try {
-            return socket.getTcpKeepaliveIntvl();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    @Override
-    public void setTcpKeepAliveProbes(int keepAliveProbes) {
-        try {
-            socket.setTcpKeepAliveProbes(keepAliveProbes);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    @Override
-    public int getTcpKeepaliveProbes() {
-        try {
-            return socket.getTcpKeepaliveProbes();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+    public AsyncSocketOptions options() {
+        return options;
     }
 
     @Override
@@ -285,12 +166,6 @@ public final class IOUringAsyncSocket extends AsyncSocket {
             throw new IllegalStateException(this + " is already started");
         }
         started = true;
-
-        if (readHandler == null) {
-            throw new IllegalStateException("Can't activate " + this + ": readhandler isn't set");
-        }
-
-        this.receiveBuff = ByteBuffer.allocateDirect(getReceiveBufferSize());
 
         if (!clientSide) {
             sq_addRead();
@@ -387,8 +262,8 @@ public final class IOUringAsyncSocket extends AsyncSocket {
             reactor.deregisterCloseable(this);
         }
 
-        if (socket != null) {
-            socket.close();
+        if (nativeSocket != null) {
+            nativeSocket.close();
         }
     }
 
@@ -407,7 +282,7 @@ public final class IOUringAsyncSocket extends AsyncSocket {
                 IORING_OP_RECV,     // op
                 0,                  // flags
                 0,                  // rw-flags
-                socket.fd(),      // fd
+                nativeSocket.fd(),      // fd
                 address,            // buffer address
                 length,             // length
                 0,                  // offset
@@ -426,13 +301,13 @@ public final class IOUringAsyncSocket extends AsyncSocket {
 
         CompletableFuture<Void> future = new CompletableFuture<>();
         try {
-            boolean oldBlocking = socket.isBlocking();
-            socket.setBlocking(true);
-            boolean connect = socket.connect(address);
-            socket.setBlocking(false);
+            boolean oldBlocking = nativeSocket.isBlocking();
+            nativeSocket.setBlocking(true);
+            boolean connect = nativeSocket.connect(address);
+            nativeSocket.setBlocking(false);
             if (connect) {
-                this.remoteAddress = socket.getRemoteAddress();
-                this.localAddress = socket.getLocalAddress();
+                this.remoteAddress = nativeSocket.getRemoteAddress();
+                this.localAddress = nativeSocket.getLocalAddress();
 
                 if (logger.isInfoEnabled()) {
                     logger.info("Connected from " + localAddress + "->" + remoteAddress);
@@ -475,7 +350,7 @@ public final class IOUringAsyncSocket extends AsyncSocket {
                             IORING_OP_SEND,         // op
                             0,                       // flags
                             0,                       // rw-flags
-                            socket.fd(),           // fd
+                            nativeSocket.fd(),           // fd
                             address,                 // buffer address
                             length,                  // number of bytes to write.
                             0,                       // offset
@@ -490,7 +365,7 @@ public final class IOUringAsyncSocket extends AsyncSocket {
                             IORING_OP_WRITEV,       // op
                             0,                      // flags
                             0,                      // rw-flags
-                            socket.fd(),          // fd
+                            nativeSocket.fd(),          // fd
                             address,                // iov start address
                             count,                  // number of iov entries
                             0,                      // offset
