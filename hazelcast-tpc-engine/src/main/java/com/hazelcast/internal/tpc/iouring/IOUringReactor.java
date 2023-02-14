@@ -61,9 +61,9 @@ public class IOUringReactor extends Reactor {
     }
 
     /**
-     * Registers an AutoCloseable on this Eventloop.
+     * Registers an AutoCloseable on this Reactor.
      * <p>
-     * Registered closeable are automatically closed when the eventloop closes.
+     * Registered closeable are automatically closed when the Reactor shuts down.
      * Some examples: AsyncSocket and AsyncServerSocket.
      * <p>
      * If the Eventloop isn't in the running state, false is returned.
