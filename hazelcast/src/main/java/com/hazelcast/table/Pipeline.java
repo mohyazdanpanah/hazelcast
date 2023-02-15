@@ -20,6 +20,10 @@ public interface Pipeline {
 
     void noop(int partitionId);
 
+    void get(byte[] key);
+
+    void set(byte[] key, byte[] value);
+
     void execute();
 
     void reset();

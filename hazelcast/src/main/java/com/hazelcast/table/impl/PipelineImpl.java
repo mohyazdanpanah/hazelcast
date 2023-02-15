@@ -12,6 +12,10 @@ import com.hazelcast.internal.tpc.iobuffer.IOBuffer;
 import com.hazelcast.internal.tpc.iobuffer.IOBufferAllocator;
 import com.hazelcast.table.Pipeline;
 
+import java.util.Arrays;
+
+import static com.hazelcast.internal.util.HashUtil.hashToIndex;
+
 /**
  * todo:
  * can we collect the requests into a single IOBuffer and then flush that buffer in 1 go
@@ -24,6 +28,7 @@ public final class PipelineImpl implements Pipeline {
 
     private final AltoRuntime altoRuntime;
     private final IOBufferAllocator requestAllocator;
+    private final int partitionCount;
     private PartitionActorRef actorRef;
     private final InternalPartitionServiceImpl partitionService;
     private int partitionId = -1;
@@ -35,19 +40,58 @@ public final class PipelineImpl implements Pipeline {
         this.altoRuntime = altoRuntime;
         this.requestAllocator = requestAllocator;
         this.partitionService = altoRuntime.node.partitionService;
-        this.request = new IOBuffer(64*1024);//requestAllocator.allocate();
+        this.partitionCount = altoRuntime.node.nodeEngine.getPartitionService().getPartitionCount();
+        this.request = new IOBuffer(64 * 1024);//requestAllocator.allocate();
     }
 
     public void noop(int partitionId) {
         init(partitionId);
 
-        int pos = request.position();
+        int sizePos = request.position();
         // size placeholder
         request.writeInt(0);
         // opcode
         request.writeInt(OpCodes.NOOP);
         // set the size.
-        request.putInt(pos, request.position() - pos);
+        request.putInt(sizePos, request.position() - sizePos);
+
+        count++;
+    }
+
+    @Override
+    public void get(byte[] key) {
+        int partitionId = hashToIndex(Arrays.hashCode(key), partitionCount);
+        init(partitionId);
+
+        int sizePos = request.position();
+        // size placeholder
+        request.writeInt(0);
+        // opcode
+        request.writeInt(OpCodes.GET);
+        // writing the key
+        request.writeSizedBytes(key);
+        // fixing the size
+        request.putInt(sizePos, request.position() - sizePos);
+
+        count++;
+    }
+
+    @Override
+    public void set(byte[] key, byte[] value) {
+        int partitionId = hashToIndex(Arrays.hashCode(key), partitionCount);
+        init(partitionId);
+
+        int sizePos = request.position();
+        // size placeholder
+        request.writeInt(0);
+        // opcode
+        request.writeInt(OpCodes.SET);
+        // writing the key
+        request.writeSizedBytes(key);
+        // writing the key
+        request.writeSizedBytes(value);
+        // fixing the size
+        request.putInt(sizePos, request.position() - sizePos);
 
         count++;
     }

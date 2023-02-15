@@ -9,8 +9,8 @@ import com.hazelcast.table.Table;
 
 public class PipelineMain {
 
-    public static long rounds = 100 * 1000;
-    public static long pipelineSize = 2000;
+    public static long rounds = 1000 * 1000;
+    public static long pipelineSize = 16;
 
     public static void main(String[] args) throws Exception {
         System.setProperty("hazelcast.alto.enabled", "true");
@@ -23,11 +23,14 @@ public class PipelineMain {
 
         Table table = node1.getTable("sometable");
 
+        byte[] key = "foo".getBytes();
+        byte[] value = "value".getBytes();
+
         long startMs = System.currentTimeMillis();
         Pipeline pipeline = table.newPipeline();
         for (int round = 0; round < rounds; round++) {
             for (int l = 0; l < pipelineSize; l++) {
-                pipeline.noop(0);
+                pipeline.set(key, value);
             }
             pipeline.execute();
             pipeline.reset();
