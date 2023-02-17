@@ -99,6 +99,10 @@ public final class PipelineImpl implements Pipeline {
             throw new IllegalArgumentException("PartitionId can't be smaller than 0");
         }
 
+        if (partitionId > partitionCount - 1) {
+            throw new IllegalArgumentException("PartitionId can't be larger than " + (partitionCount - 1) + " but was:" + partitionId);
+        }
+
         if (this.partitionId == -1) {
             Address address = partitionService.getPartitionOwner(partitionId);
             if (address == null) {
