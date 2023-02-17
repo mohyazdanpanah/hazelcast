@@ -144,6 +144,7 @@ public final class SubmissionQueue {
         long sqeAddr = sqesAddr + index * SIZE_SQE;
         UNSAFE.putByte(sqeAddr + OFFSET_SQE_opcode, opcode);
         UNSAFE.putByte(sqeAddr + OFFSET_SQE_flags, (byte) flags);
+        UNSAFE.putShort(sqeAddr + OFFSET_SQE_ioprio, (short) 0);
         UNSAFE.putInt(sqeAddr + OFFSET_SQE_fd, fd);
         UNSAFE.putLong(sqeAddr + OFFSET_SQE_off, offset);
         UNSAFE.putLong(sqeAddr + OFFSET_SQE_addr, bufferAddress);

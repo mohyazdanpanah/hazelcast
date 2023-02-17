@@ -60,8 +60,7 @@ public final class PipelineImpl implements Pipeline {
 
     @Override
     public void get(byte[] key) {
-        int partitionId = hashToIndex(Arrays.hashCode(key), partitionCount);
-        init(partitionId);
+        init(hashToIndex(Arrays.hashCode(key), partitionCount));
 
         int sizePos = request.position();
         // size placeholder
@@ -78,8 +77,7 @@ public final class PipelineImpl implements Pipeline {
 
     @Override
     public void set(byte[] key, byte[] value) {
-        int partitionId = hashToIndex(Arrays.hashCode(key), partitionCount);
-        init(partitionId);
+        init(hashToIndex(Arrays.hashCode(key), partitionCount));
 
         int sizePos = request.position();
         // size placeholder
@@ -125,7 +123,7 @@ public final class PipelineImpl implements Pipeline {
 
         RequestFuture<IOBuffer> requestFuture = actorRef.submit(request);
         IOBuffer response = requestFuture.join();
-        //response.release();
+        response.release();
     }
 
     @Override

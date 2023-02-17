@@ -308,7 +308,7 @@ public final class IOUringAsyncSocket extends AsyncSocket {
             boolean oldBlocking = nativeSocket.isBlocking();
             nativeSocket.setBlocking(true);
             boolean connect = nativeSocket.connect(address);
-            nativeSocket.setBlocking(false);
+            nativeSocket.setBlocking(oldBlocking);
             if (connect) {
                 this.remoteAddress = nativeSocket.getRemoteAddress();
                 this.localAddress = nativeSocket.getLocalAddress();
@@ -349,6 +349,7 @@ public final class IOUringAsyncSocket extends AsyncSocket {
                     long address = bufferAddress + buffer.position();
                     int length = buffer.remaining();
 
+                    // IORING_OP_SEND is more efficient than IORING_OP_WRITE
                     // todo: return value
                     sq.offer(
                             IORING_OP_SEND,         // op
