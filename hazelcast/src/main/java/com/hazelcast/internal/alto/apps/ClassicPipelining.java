@@ -6,12 +6,15 @@ import com.hazelcast.core.Pipelining;
 import com.hazelcast.map.IMap;
 import com.hazelcast.partition.Partition;
 
+import java.net.SocketAddress;
 import java.util.concurrent.ThreadLocalRandom;
+
+import static com.hazelcast.internal.alto.apps.MainUtil.findPartition;
 
 public class ClassicPipelining {
 
-    public static long rounds = 100 * 1000;
-    public static int pipelineSize = 100;
+    public static long rounds = 10 * 1000;
+    public static int pipelineSize = 8192;
     public static int hashtableSize = 100_000;
     public static byte[][] keys;
     public static int partitionCount = 10;
@@ -23,11 +26,7 @@ public class ClassicPipelining {
         HazelcastInstance localNode = Hazelcast.newHazelcastInstance();
         HazelcastInstance remoteNode = Hazelcast.newHazelcastInstance();
 
-
-        System.out.println("Waiting for partition tables to settle");
-        Thread.sleep(5000);
-        System.out.println("Waiting for partition tables to settle: done");
-        int targetPartitionId = remoteNode.getPartitionService().getPartitions().iterator().next().getPartitionId();
+        int targetPartitionId = findPartition(remoteNode);
 
         keys = new byte[hashtableSize][];
         IMap<byte[], byte[]> map = localNode.getMap("map");
@@ -36,6 +35,8 @@ public class ClassicPipelining {
 
         runBenchmark(keys, map);
         localNode.shutdown();
+        remoteNode.shutdown();
+        System.exit(0);
     }
 
     private static void generateData(int targetPartition, IMap<byte[], byte[]> map, HazelcastInstance hz) {

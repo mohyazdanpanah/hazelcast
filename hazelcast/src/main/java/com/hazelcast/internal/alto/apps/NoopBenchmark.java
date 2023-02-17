@@ -53,6 +53,7 @@ public class NoopBenchmark {
         long duration = System.currentTimeMillis() - startMs;
         System.out.println("Throughput: " + (operations * 1000.0f / duration) + " op/s");
         node1.shutdown();
-        node2.shutdown();
+        //remoteNode.shutdown();
+        System.exit(0);
     }
 }

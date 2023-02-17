@@ -9,12 +9,13 @@ import com.hazelcast.table.Table;
 import java.util.Arrays;
 import java.util.concurrent.ThreadLocalRandom;
 
+import static com.hazelcast.internal.alto.apps.MainUtil.findPartition;
 import static com.hazelcast.internal.util.HashUtil.hashToIndex;
 
 public class PipelineHashTableMain {
 
-    public static long rounds = 100 * 1000;
-    public static int pipelineSize = 100;
+    public static long rounds = 400 * 1000;
+    public static int pipelineSize = 2;
     public static int hashtableSize = 100_000;
     public static byte[][] keys;
     public static int partitionCount = 10;
@@ -29,10 +30,8 @@ public class PipelineHashTableMain {
         HazelcastInstance localNode = Hazelcast.newHazelcastInstance();
         HazelcastInstance remoteNode = Hazelcast.newHazelcastInstance();
 
-        System.out.println("Waiting for partition tables to settle");
-        Thread.sleep(5000);
-        System.out.println("Waiting for partition tables to settle: done");
-        int targetPartitionId = remoteNode.getPartitionService().getPartitions().iterator().next().getPartitionId();
+        int targetPartitionId = findPartition(remoteNode);
+
 
         Table table = localNode.getTable("sometable");
 
@@ -40,8 +39,9 @@ public class PipelineHashTableMain {
 
         runBenchmark(table);
 
-        remoteNode.shutdown();
         localNode.shutdown();
+        remoteNode.shutdown();
+        System.exit(0);
     }
 
     private static void runBenchmark(Table table) {
@@ -75,7 +75,7 @@ public class PipelineHashTableMain {
             keys[k] = key;
             table.set(key, "fooo".getBytes());
 
-            if (k % 1000 == 0) {
+            if (k % 100 == 0) {
                 System.out.println("\tinserting:" + k);
             }
         }
